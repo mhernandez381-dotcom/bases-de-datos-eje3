@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Spring Boot 4.1.2 (GA 2026-10-22, soporte OSS hasta 2027-07-31). Requiere Java 17+, admite hasta 27. -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.2</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>edu.huella</groupId>
+    <artifactId>huella-empresas</artifactId>
+    <version>0.1.0</version>
+    <name>Huella de carbono - MVP Empresas</name>
+    <description>Aplicación de escritorio Swing: login y CRUD de empresas (Spring Boot no web + JDBC + MariaDB)</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Definida vacía para que @{argLine} se resuelva aunque no haya otros agentes. -->
+        <argLine/>
+        <!-- Integración desactivada por defecto; activar con: ./mvnw verify -Dintegracion -->
+        <skipITs>true</skipITs>
+    </properties>
+
+    <dependencies>
+        <!-- Contexto Spring + JdbcTemplate + HikariCP. Sin starter web. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <!-- Driver MariaDB; versión gestionada por el BOM de Spring Boot. -->
+        <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
+        </dependency>
+        <!-- Solo BCrypt (PasswordEncoder). No se usa el stack web de Spring Security. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
+        <!-- Pruebas: JUnit Jupiter, Mockito, AssertJ (versiones del BOM). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Expone la ruta del jar de Mockito para cargarlo como agente (JDK 21+). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Unitarias (*Test): sin base de datos ni ventanas. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar} -Djava.awt.headless=true</argLine>
+                </configuration>
+            </plugin>
+            <!-- Integración (*IT): MariaDB real, solo con -Pintegracion. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <skipITs>${skipITs}</skipITs>
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar} -Djava.awt.headless=true</argLine>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>integracion</id>
+            <activation>
+                <property>
+                    <name>integracion</name>
+                </property>
+            </activation>
+            <properties>
+                <skipITs>false</skipITs>
+            </properties>
+        </profile>
+    </profiles>
+</project>

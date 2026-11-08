@@ -1,0 +1,58 @@
+# Servicios del Dev Container. Las variables se leen de .devcontainer/.env
+# (ignorado por Git, generado por init-secrets.sh). ${VAR:?} hace fallar el
+# arranque si falta un secreto, en lugar de usar valores vacíos.
+name: huella-mvp
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    shm_size: "1gb"
+    environment:
+      HUELLA_DB_HOST: db
+      HUELLA_DB_PORT: "3306"
+      HUELLA_DB_NAME: sg_huella_carbono_revision
+      HUELLA_DB_USER: ${HUELLA_DB_APP_USER:?falta en .devcontainer/.env}
+      HUELLA_DB_PASSWORD: ${HUELLA_DB_APP_PASSWORD:?falta en .devcontainer/.env}
+      HUELLA_TEST_DB_NAME: sg_huella_carbono_test
+      HUELLA_TEST_DB_USER: ${HUELLA_DB_TEST_USER:?falta en .devcontainer/.env}
+      HUELLA_TEST_DB_PASSWORD: ${HUELLA_DB_TEST_PASSWORD:?falta en .devcontainer/.env}
+      TZ: UTC
+      # desktop-lite 1.2.10 solo activa la contraseña VNC si VNC_PASSWORD existe en
+      # tiempo de ejecución; sin ella arranca con "-SecurityTypes None" (sin clave).
+      VNC_PASSWORD: ${HUELLA_VNC_PASSWORD:?falta en .devcontainer/.env}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:11.8.8
+    restart: unless-stopped
+    # Sin "ports:": MariaDB NO se publica; solo es accesible como "db" en esta red.
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?falta en .devcontainer/.env}
+      HUELLA_DB_APP_USER: ${HUELLA_DB_APP_USER:?falta en .devcontainer/.env}
+      HUELLA_DB_APP_PASSWORD: ${HUELLA_DB_APP_PASSWORD:?falta en .devcontainer/.env}
+      HUELLA_DB_TEST_USER: ${HUELLA_DB_TEST_USER:?falta en .devcontainer/.env}
+      HUELLA_DB_TEST_PASSWORD: ${HUELLA_DB_TEST_PASSWORD:?falta en .devcontainer/.env}
+      TZ: UTC
+    command: ["--default-time-zone=+00:00", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_general_ci"]
+    volumes:
+      - huella-mariadb-data:/var/lib/mysql
+      # Solo se ejecutan si el volumen de datos está VACÍO (primer arranque).
+      - ../db/init:/docker-entrypoint-initdb.d:ro
+      - ../db/esquema:/huella-esquema:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  # Persistente entre paradas y rebuilds del Codespace; se pierde si se ELIMINA el Codespace.
+  huella-mariadb-data:
