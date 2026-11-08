@@ -217,14 +217,14 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 
 ## Próximo paso
 
-1. ✅ Checkpoints locales `7c9eecb` (E0–E2), `19bdd62` (puerta E2), `6fbf534` (E3), `9097856` (E4) y el commit de E5. **Sin push.**
+1. ✅ Commits `7c9eecb` (E0–E2), `19bdd62` (puerta E2), `6fbf534` (E3), `9097856` (E4), `2c538ce` (E5). **Push autorizado y hecho** (2026-11-08) a `origin/feat/mvp-empresas`; PR #1 hacia `main` abierto: https://github.com/mhernandez381-dotcom/bases-de-datos-eje3/pull/1 (sin merge).
 2. ✅ Hooks LFS retirados y base de restauración eliminada (autorizado).
-3. **Usuario:** decidir el push de `feat/mvp-empresas` y el PR a `main` (no autorizado todavía).
+3. **Usuario:** revisar el PR #1 y decidir el merge (el agente no hace merge).
 4. **Usuario (recomendado):** repetir el recorrido en noVNC; revisión independiente secuencial con `PROMPTS_REVISION.md`; confirmar la rúbrica con el docente.
 
 ## Decisiones pendientes de verificación (del kit)
 
 - Rúbrica: suficiencia de un CRUD y aceptación de borrado lógico (a confirmar por el usuario con el docente).
-- Push: no autorizado todavía (todos los commits son locales).
+- Push hecho con autorización; merge a `main` pendiente de decisión del usuario.
 
 No guardar secretos ni tokens en este archivo.
