@@ -8,7 +8,7 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 |---|---|---|
 | E0 — Inspección del entorno | **Probado** | Ver registro 2026-11-08 #1 |
 | E1 — Configuración reproducible | **Probado** (réplica con `@devcontainers/cli` dentro del Codespace) | Ver registros #1 y #2 |
-| E2 — Ventana + conexión MariaDB | **Probado en réplica del Dev Container** (display `:1` que sirve noVNC, captura revisada). **Pendiente del usuario**: rebuild real en Codespaces + ver la ventana en el navegador por noVNC con contraseña + puerto 6080 *Private* | `docs/evidencias/E2-ventana-diagnostico-devcontainer-display1.png`, `docs/evidencias/E2-ventana-diagnostico-xvfb.png` |
+| E2 — Ventana + conexión MariaDB | **Probado y cerrado** en el Codespace real (registro #3): BD, VNC con contraseña, ventana vista por el usuario vía noVNC, puerto 6080 *Private* (confirmado por el usuario), cierre con la X → JVM terminada | `docs/evidencias/E2-ventana-diagnostico-codespace-real.png` (+ capturas de réplica) |
 | E3 — Esquema, semilla y login | Esquema derivado **probado** en MariaDB 11.8.8; semilla/login **pendientes** | — |
 | E4 — CRUD Empresa | Pendiente | — |
 | E5 — Pruebas y entrega | Pendiente | — |
@@ -87,15 +87,36 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 
 **Archivos añadidos en #2:** `.devcontainer/devcontainer-lock.json`, `scripts/ejecutar.sh`, `docs/evidencias/E2-ventana-diagnostico-devcontainer-display1.png`, `README.md` (ampliado, conserva el texto original).
 
+### 2026-11-08 #3 — Codespace real tras *Rebuild Container* (Dev Container del repo)
+
+**Etapa:** puerta de validación E2.
+
+**Repositorio:** raíz `/workspaces/bases-de-datos-eje3`, rama `feat/mvp-empresas`, HEAD `7c9eecb` (verificado, sin reset/checkout). Cambios sin commit encontrados: `ESTADO.md` (nota del checkpoint) y `.devcontainer/devcontainer-lock.json` (solo falta el salto de línea final, regenerado por el rebuild; contenido idéntico). Ambos conservados.
+
+**Comprobado (ejecutado de verdad):**
+- Entorno: `CODESPACES=true`, Debian 12 (imagen del Dev Container), usuario `vscode`, `DISPLAY=:1`, `TZ=UTC`, JDK 21.0.13, `db` resuelve en la red de compose.
+- `.devcontainer/.env` existe con permisos `-rw-------` (valores no mostrados).
+- MariaDB como `huella_app`: `11.8.8-MariaDB-ubu2404`, zona global/sesión `+00:00`, 8 tablas en `sg_huella_carbono_revision`, grants SELECT/INSERT/UPDATE.
+- Escritorio: Xtigervnc con `-SecurityTypes VncAuth` solo en `127.0.0.1:5901`; noVNC (websockify) en `0.0.0.0:6080`, `curl /vnc.html` → 200. El archivo de contraseña base y el que usa Xtigervnc coinciden (hash) con `vncpasswd -f` de `HUELLA_VNC_PASSWORD` → `post-start.sh` aplicó la contraseña del `.env`.
+- `./mvnw -B -q package -DskipTests` → OK. `java -jar` con `DISPLAY=:1` → log `Diagnóstico BD: version=11.8.8…, zona=+00:00, tablas=[8]`; `xwininfo`: ventana «Huella de carbono — diagnóstico» `IsViewable`; captura del display revisada (MariaDB 11.8.8, zona +00:00, «Tablas: 8/8 OK»).
+
+**Defecto encontrado y corregido:** `scripts/ejecutar.sh --demo` hacía `source` del `.env`, que falla en bash porque `HUELLA_DEMO_NOMBRE` lleva un espacio sin comillas (formato de compose). Ahora se exportan solo las tres variables `HUELLA_DEMO_*` leídas con `grep`. Verificado con `bash -n` y lectura de prueba (sin mostrar valores). El modo `--demo` en sí aún no tiene efecto (semilla = E3).
+
+**Confirmación del usuario (2026-11-08):** puerto 6080 *Private*, conexión noVNC con contraseña y ventana con «Tablas: 8/8 OK» vistas en el navegador. Tras cerrarla, el agente comprobó: proceso 7104 terminado (`kill -0` falla), ninguna JVM de la app viva y ninguna ventana «Huella» en `:1` → **cierre limpio**. Puerta E2 superada.
+
+**No verificable por el agente:** la visibilidad *Private* del puerto 6080 (no hay `gh` en el contenedor; `devcontainer.json` no puede fijar visibilidad, el valor por defecto de Codespaces es privado) y la vista real en el navegador por noVNC. El cierre con la X lo hará el usuario sobre la ventana que quedó abierta.
+
 ## Próximo paso
 
-1. **Usuario:** (opcional, recomendado) autorizar un commit de checkpoint en `feat/mvp-empresas` antes del rebuild — el rebuild conserva `/workspaces`, pero un commit protege ante la eliminación del Codespace.
-2. **Usuario:** *Codespaces: Rebuild Container*. Luego: pestaña Puertos → 6080 debe estar *Private* → abrir en navegador → *Connect* con `HUELLA_VNC_PASSWORD` → en la terminal `scripts/ejecutar.sh` → confirmar que ves la ventana «Huella de carbono — diagnóstico» con «Tablas: 8/8 OK» y que se cierra con la X.
-3. **Agente (tras el rebuild):** ejecutar `claude` (re-autenticar), leer `ESTADO.md`, repetir comprobaciones de E2 en el Codespace real y continuar con **E3**: semilla demo (perfil `demo`, BCrypt, idempotente), `UsuarioDAO`, autenticación, sesión y pantalla de login, con pruebas unitarias e integración en `sg_huella_carbono_test`.
+1. ✅ Checkpoint `7c9eecb` (local, **sin push**; un push requiere autorización aparte).
+2. ✅ Rebuild real hecho y comprobaciones del agente en el Codespace real (registro #3).
+3. ✅ Puerta E2 superada (confirmación visual del usuario + cierre limpio verificado).
+4. **Usuario (opcional):** autorizar commit de checkpoint E2 (`ESTADO.md`, `scripts/ejecutar.sh`, evidencia, lock).
+5. **Agente:** E3 — semilla demo (perfil `demo`, BCrypt, idempotente), `UsuarioDAO`, autenticación, sesión y pantalla de login, con pruebas unitarias e integración en `sg_huella_carbono_test`.
 
 ## Decisiones pendientes de verificación (del kit)
 
 - Rúbrica: suficiencia de un CRUD y aceptación de borrado lógico (a confirmar por el usuario con el docente).
-- Permiso para commits y push (no se ha hecho ninguno).
+- Push: no autorizado (solo existe el commit local `7c9eecb`).
 
 No guardar secretos ni tokens en este archivo.

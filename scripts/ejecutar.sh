@@ -10,7 +10,11 @@ if [ ! -f "$JAR" ] || [ -n "$(find src pom.xml -newer "$JAR" -print -quit)" ]; t
 fi
 PERFIL=()
 if [ "${1:-}" = "--demo" ]; then
-  set -a; . .devcontainer/.env; set +a   # HUELLA_DEMO_* solo para este proceso
+  # Solo HUELLA_DEMO_* y solo para este proceso. No se hace `source` del .env:
+  # sus valores no van entre comillas (formato de docker compose) y alguno lleva espacios.
+  while IFS='=' read -r clave valor; do
+    export "$clave=$valor"
+  done < <(grep -E '^HUELLA_DEMO_(NOMBRE|CORREO|PASSWORD)=' .devcontainer/.env)
   PERFIL=(--spring.profiles.active=demo)
 fi
 export DISPLAY="${DISPLAY:-:1}"
