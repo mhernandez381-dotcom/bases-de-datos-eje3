@@ -1,0 +1,46 @@
+{
+  "name": "Huella de carbono — MVP Empresas (Java 21 + MariaDB + escritorio)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "runServices": ["app", "db"],
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "shutdownAction": "stopCompose",
+
+  // Crea .devcontainer/.env con secretos aleatorios si no existe (no lo sobrescribe).
+  "initializeCommand": "bash .devcontainer/init-secrets.sh",
+
+  "features": {
+    "ghcr.io/devcontainers/features/desktop-lite:1.2.10": {
+      // Valor provisional de construcción; post-start.sh lo reemplaza por
+      // HUELLA_VNC_PASSWORD del .env en cada arranque. No es la contraseña real.
+      "password": "provisional-reemplazada-al-arrancar",
+      "webPort": "6080",
+      "vncPort": "5901"
+    },
+    // Herramienta de desarrollo (no forma parte de la app): CLI del agente.
+    // La autenticación NO se conserva en la imagen; repetir "claude" tras cada rebuild.
+    "ghcr.io/devcontainers/features/node:2.1.1": { "version": "22" },
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {}
+  },
+
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+
+  // Solo noVNC. MariaDB (3306) y VNC directo (5901) no se reenvían.
+  "forwardPorts": [6080],
+  "portsAttributes": {
+    "6080": { "label": "Escritorio noVNC (privado)", "onAutoForward": "notify" }
+  },
+  "otherPortsAttributes": { "onAutoForward": "ignore" },
+
+  "remoteEnv": {
+    "HUELLA_DB_HOST": "db"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["vscjava.vscode-java-pack"]
+    }
+  },
+
+  "hostRequirements": { "cpus": 2, "memory": "8gb" }
+}
