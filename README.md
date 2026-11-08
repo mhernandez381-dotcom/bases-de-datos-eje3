@@ -54,6 +54,27 @@ La cuenta usa `HUELLA_DEMO_NOMBRE`, `HUELLA_DEMO_CORREO` y `HUELLA_DEMO_PASSWORD
 
 Las siguientes veces basta `scripts/ejecutar.sh`. Login: correo + contraseña, *Enter* o «Entrar»; «Cerrar sesión» (Alt+S) vuelve al login.
 
+### Gestión de empresas
+
+Tras el login se muestran las empresas **activas del usuario de la sesión** (ID, NIT, nombre y fechas en UTC con formato `yyyy-MM-dd HH:mm:ss`).
+
+| Acción | Botón | Teclado |
+|---|---|---|
+| Crear | Nueva | Alt+N |
+| Editar la seleccionada | Editar | Alt+E o doble clic |
+| Eliminar la seleccionada (pide confirmación; «Cancelar» por defecto) | Eliminar | Alt+L o Supr |
+| Volver a cargar | Actualizar | Alt+A o F5 |
+| En el formulario: guardar / cancelar | Guardar / Cancelar | Enter / Escape |
+
+Reglas: solo se escriben NIT (obligatorio, máx. 20) y nombre (obligatorio, máx. 150), sin espacios al inicio o final; el propietario es siempre el usuario de la sesión. El NIT es único **también frente a empresas eliminadas**: no se reutiliza ni se restaura automáticamente. «Eliminar» es lógico (`eliminado_en`), la fila se conserva. Si la empresa ya no existe o fue eliminada, la aplicación lo informa y recarga la lista en lugar de simular éxito.
+
+Para probar la interfaz **sin tocar la base operativa** (la base de pruebas se vacía en cada `verify -Dintegracion`):
+
+```bash
+HUELLA_DB_NAME=sg_huella_carbono_test HUELLA_DB_USER="$HUELLA_TEST_DB_USER" \
+HUELLA_DB_PASSWORD="$HUELLA_TEST_DB_PASSWORD" scripts/ejecutar.sh --demo
+```
+
 Cerrar la ventana cierra el contexto Spring y el pool de conexiones y termina el proceso.
 
 ## 3. Pruebas
@@ -64,8 +85,8 @@ Cerrar la ventana cierra el contexto Spring y el pool de conexiones y termina el
 db/derivar-esquema.sh --verificar      # el esquema operativo coincide con el SQL de referencia
 ```
 
-- Unitarias (`*Test`): servicio de autenticación y semilla, con Mockito.
-- Integración (`*IT`): DAO de usuario, semilla e inicio de sesión contra MariaDB real. Usan solo `sg_huella_carbono_test` con `huella_test`: si la base está vacía aplican `db/esquema/tablas.sql`; si ya tiene las 8 tablas la vacían con `DELETE` antes de cada prueba; ante un esquema parcial fallan sin hacer DROP. Nunca tocan la base operativa.
+- Unitarias (`*Test`): servicios de autenticación y empresas, y semilla, con Mockito.
+- Integración (`*IT`): DAO de usuario y empresa, semilla, inicio de sesión y reglas del CRUD (A04–A11, A15) contra MariaDB real. Usan solo `sg_huella_carbono_test` con `huella_test`: si la base está vacía aplican `db/esquema/tablas.sql`; si ya tiene las 8 tablas la vacían con `DELETE` antes de cada prueba; ante un esquema parcial fallan sin hacer DROP. Nunca tocan la base operativa.
 
 ## 4. Respaldo
 

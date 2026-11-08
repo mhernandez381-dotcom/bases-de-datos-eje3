@@ -1,6 +1,7 @@
 package edu.huella;
 
 import edu.huella.service.AutenticacionService;
+import edu.huella.service.EmpresaService;
 import edu.huella.view.AplicacionUI;
 import javax.swing.SwingUtilities;
 import org.springframework.boot.WebApplicationType;
@@ -18,6 +19,7 @@ public class HuellaApplication {
                 .headless(false)
                 .run(args);
         AutenticacionService autenticacion = contexto.getBean(AutenticacionService.class);
-        SwingUtilities.invokeLater(() -> new AplicacionUI(contexto, autenticacion).mostrarLogin());
+        EmpresaService empresas = contexto.getBean(EmpresaService.class);
+        SwingUtilities.invokeLater(() -> new AplicacionUI(contexto, autenticacion, empresas).mostrarLogin());
     }
 }

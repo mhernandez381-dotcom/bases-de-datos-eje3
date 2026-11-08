@@ -4,6 +4,7 @@ import edu.huella.controller.EmpresasControlador;
 import edu.huella.controller.LoginControlador;
 import edu.huella.dto.UsuarioSesion;
 import edu.huella.service.AutenticacionService;
+import edu.huella.service.EmpresaService;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -16,12 +17,15 @@ public class AplicacionUI {
 
     private final ConfigurableApplicationContext contexto;
     private final AutenticacionService autenticacion;
+    private final EmpresaService empresas;
     private JFrame ventanaActual;
     private boolean cerrando;
 
-    public AplicacionUI(ConfigurableApplicationContext contexto, AutenticacionService autenticacion) {
+    public AplicacionUI(ConfigurableApplicationContext contexto, AutenticacionService autenticacion,
+                        EmpresaService empresas) {
         this.contexto = contexto;
         this.autenticacion = autenticacion;
+        this.empresas = empresas;
     }
 
     public void mostrarLogin() {
@@ -41,9 +45,10 @@ public class AplicacionUI {
             return; // el usuario cerró la ventana mientras se verificaba
         }
         EmpresasVista vista = new EmpresasVista(usuario);
-        new EmpresasControlador(vista, autenticacion, this::mostrarLogin);
+        EmpresasControlador controlador = new EmpresasControlador(vista, empresas, autenticacion, this::mostrarLogin);
         vista.alCerrar(this::salir);
         cambiarA(vista);
+        controlador.iniciar();
     }
 
     private void cambiarA(JFrame nueva) {

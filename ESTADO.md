@@ -10,7 +10,7 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 | E1 — Configuración reproducible | **Probado** (réplica con `@devcontainers/cli` dentro del Codespace) | Ver registros #1 y #2 |
 | E2 — Ventana + conexión MariaDB | **Probado y cerrado** en el Codespace real (registro #3): BD, VNC con contraseña, ventana vista por el usuario vía noVNC, puerto 6080 *Private* (confirmado por el usuario), cierre con la X → JVM terminada | `docs/evidencias/E2-ventana-diagnostico-codespace-real.png` (+ capturas de réplica) |
 | E3 — Esquema, semilla y login | **Probado** (registro #4): 12 unitarias + 10 integración MariaDB real OK; semilla idempotente en la base operativa; login inválido/válido, logout, BD caída y cierre comprobados en el display `:1` con capturas. **Pendiente**: que el usuario lo repita en noVNC (opcional, recomendado) | `docs/evidencias/E3-*.png` |
-| E4 — CRUD Empresa | Pendiente | — |
+| E4 — CRUD Empresa | **Probado** (registro #5): 20 unitarias + 23 integración MariaDB real OK; recorrido visual completo en `:1` sobre la base de pruebas. **Pendiente**: repetición del usuario en noVNC (recomendada) | `docs/evidencias/E4-*.png` |
 | E5 — Pruebas y entrega | Pendiente | — |
 
 ## Versiones fijadas (verificadas en fuentes oficiales el 2026-11-08)
@@ -135,12 +135,66 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 
 **Observación del entorno:** `.git/hooks` contiene hooks de Git LFS (`post-commit`, `pre-push`, …) pero `git-lfs` no está instalado y el repo no tiene `.gitattributes`. El commit funciona con un aviso; **el hook `pre-push` probablemente bloqueará un push** hasta instalar git-lfs o retirar esos hooks (requiere decisión del usuario).
 
+### 2026-11-08 #5 — E4: CRUD Empresa (Codespace real)
+
+**Commit previo autorizado:** `6fbf534` (E3, local, sin push).
+
+**Archivos nuevos:** `model/Empresa`, `dto/EmpresaFormulario` (solo NIT y nombre: no hay campo de propietario), `dto/EmpresaResumen`, `exception/ValidacionException`, `dao/EmpresaDAO` + `EmpresaDaoJdbc`, `service/EmpresaService`, `view/EmpresasTablaModelo`, `view/EmpresaFormularioDialogo` (un formulario modal reutilizado para alta y edición), `view/FocoDialogo`. Pruebas: `EmpresaServiceTest` (8), `EmpresaServiceIT` (10), `EmpresaDaoJdbcIT` (3).
+**Modificados:** `view/EmpresasVista` (tabla + acciones), `controller/EmpresasControlador` (CRUD con SwingWorker), `view/AplicacionUI`, `HuellaApplication`, `README.md`.
+
+**Decisiones de diseño:**
+- El propietario sale siempre de `SesionUsuario.requerir()`; todas las consultas filtran `id_usuario = ? AND eliminado_en IS NULL`. Sin sesión no se toca la BD.
+- Validación antes de la BD: `strip`, obligatorios y longitud en **caracteres** (code points, como VARCHAR): NIT ≤ 20, nombre ≤ 150. No se inventa validación fiscal.
+- Unicidad del NIT garantizada por el `UNIQUE` de MariaDB (no por un SELECT previo). Tras `DuplicateKeyException` se consulta el NIT solo para explicar: «Ya existe una empresa registrada con el NIT X» o «pertenece a una empresa eliminada… no se reutilizan… no se restaura».
+- `UPDATE` devuelve filas **encontradas** (Connector/J `useAffectedRows=false` por defecto): guardar sin cambios no es un falso error; 0 filas = inexistente/ajena/eliminada → mensaje y recarga, sin falso éxito.
+- Borrado lógico con `UPDATE … SET eliminado_en = CURRENT_TIMESTAMP`; sin DELETE (el usuario `huella_app` ni siquiera tiene ese permiso), sin cascadas.
+- Una operación de BD a la vez: botones desactivados y acciones ignoradas mientras hay un SwingWorker en curso.
+- Fechas mostradas `yyyy-MM-dd HH:mm:ss` con «(UTC)» en la cabecera.
+
+**Comandos y resultados (ejecutados de verdad):**
+- `./mvnw -B verify -Dintegracion` → unitarias 20/20, integración 23/23, BUILD SUCCESS, exit 0 (ejecutado tras el último cambio de código). `db/derivar-esquema.sh --verificar` → OK; SHA-256 de la referencia sin cambios.
+- QA visual en display `:1` con xdotool y capturas revisadas, apuntando la app a `sg_huella_carbono_test` (la base operativa sigue con 1 usuario y 0 empresas): login; Alt+N + Enter vacío → «El NIT es obligatorio. El nombre es obligatorio.»; alta de dos empresas; NIT duplicado → mensaje; edición (nombre cambiado, `creado_en` igual, `actualizado_en` nuevo); Supr → confirmación (Enter = Cancelar no borra, 3 rondas); confirmar → fila con `eliminado_en`, fuera de la lista; reutilizar NIT eliminado → mensaje explicativo; reinicio de la app → datos conservados; triple Enter en Guardar → **1** fila; doble clic → edición; redimensionado 560×340 y 1300×650; Alt+S → login; Alt+F4 → JVM terminada (~1 s).
+
+**Defectos encontrados en la QA visual y corregidos:**
+1. **Foco perdido tras guardar:** al desactivar el botón enfocado durante la recarga, la ventana quedaba sin foco y los atajos (Alt+N…) dejaban de responder; además un texto tecleado acabó en un formulario de edición. Corrección: `EmpresasVista.restaurarFoco()` devuelve el foco a la tabla al terminar cada operación.
+2. **Diálogos modales sin foco bajo fluxbox/noVNC:** el formulario y la confirmación aparecían sin foco de teclado (Enter/Escape se perdían). Corrección: `FocoDialogo` pide el foco al mostrarse y reintenta hasta 6 veces (120 ms). Verificado con `xdotool getwindowfocus` en varias rondas.
+3. En edición, el NIT queda seleccionado al abrir (escribir reemplaza en vez de añadir). Tras el login, la tabla recibe el foco con la primera fila seleccionada (operable solo con teclado).
+
+**Incidencias de la automatización (no son defectos de la app):** una instancia antigua quedó abierta porque `pgrep -f` devolvió un PID equivocado y recibió algunas teclas; ahora el PID se obtiene con `xdotool getwindowpid`. La base de pruebas tenía la cuenta demo de `SemillaDemoIT` con otra contraseña: la semilla, correctamente, no la modificó (se vació la base de pruebas para la QA).
+
+**Observaciones menores / pendiente:**
+- A 560 px de ancho las columnas de fecha se recortan con «…» (se ven completas al ampliar).
+- El driver MariaDB registra en WARN el error 1062 (`Duplicate entry 'NIT' for key 'nit'`) cuando hay duplicado: log técnico sin secretos; el usuario solo ve el mensaje traducido.
+- Con la BD caída el cierre tarda ~5 s (pool intentando conectar); con BD disponible ~1 s.
+- Pendiente E5: A12 (reinicio de **MariaDB**), A16 (entorno limpio), revisión de diff/secretos, JAR y guía final; repetición por el usuario en noVNC.
+
+### Matriz de aceptación (estado tras E4)
+
+| ID | Estado | Evidencia |
+|---|---|---|
+| A01 Build | Probado | `./mvnw -B verify -Dintegracion` exit 0 |
+| A02 Semilla ×2 | Probado (operativa + IT) | registro #4, `SemillaDemoIT` |
+| A03 Login ok/mal/eliminado | Probado (IT + visual) | `AutenticacionServiceIT`, `E3-*.png` |
+| A04 Crear | Probado (IT + visual) | `EmpresaServiceIT.a04…`, `E4-03` |
+| A05 Vacíos/excesivos | Probado (unit + IT + visual) | `E4-02` |
+| A06 NIT duplicado | Probado (IT + visual) | `E4-04` |
+| A07 Listar/editar | Probado (IT + visual) | `E4-05` |
+| A08 Borrado lógico | Probado (IT + visual) | `E4-14`, `E4-15` |
+| A09 NIT eliminado | Probado (IT + visual) | `E4-08` |
+| A10 ID inexistente/eliminado | Probado (IT) | `EmpresaServiceIT.a10…` |
+| A11 Logout | Probado (IT + visual) | `E3-logout.png` |
+| A12 Reinicio app/BD | **Parcial**: reinicio de la app probado (`E4-10`); reinicio de MariaDB pendiente | — |
+| A13 Caída de BD | Probado en login (registro #4); en CRUD solo unitaria | `E3-bd-no-disponible.png` |
+| A14 Teclado/redimensionado/doble clic | Probado (visual) | `E4-11`, `E4-12`, `E4-13` |
+| A15 Propietario | Probado (IT con dos propietarios) | `EmpresaServiceIT.a15…` |
+| A16 Entorno limpio | Pendiente (E5) | — |
+
 ## Próximo paso
 
-1. ✅ Checkpoints locales `7c9eecb` (E0–E2) y `19bdd62` (puerta E2). Sin push.
-2. ✅ E3 implementada y probada (registro #4).
-3. **Usuario (recomendado):** en noVNC, `scripts/ejecutar.sh` → probar clave incorrecta, entrar con la cuenta demo (`grep HUELLA_DEMO_ .devcontainer/.env`), «Cerrar sesión» y cerrar con la X. Autorizar commit de E3.
-4. **Agente:** E4 — `Empresa` (modelo), DTO de formulario/resumen, `EmpresaDAO` (listar activas del propietario, insertar, actualizar, borrado lógico comprobando filas), servicio con validaciones (NIT/nombre: trim, obligatorios, ≤20/≤150), manejo de NIT duplicado (incluso eliminado), controlador y vista con tabla + formulario reutilizado, con unitarias e IT (A04–A10, A15).
+1. ✅ Checkpoints locales `7c9eecb`, `19bdd62`, `6fbf534`. Sin push.
+2. ✅ E4 implementada y probada (registro #5). Sin commit todavía.
+3. **Usuario:** repetir en noVNC el recorrido (recomendado: con la base de pruebas, ver README) y autorizar el commit de E4.
+4. **Agente:** E5 — A12 con reinicio real de MariaDB (requiere autorización: reiniciar el contenedor `db` sin borrar el volumen), A13 en el CRUD, revisión del diff y de secretos, JAR final, guía de entrega y decisión sobre los hooks de Git LFS.
 
 ## Decisiones pendientes de verificación (del kit)
 
