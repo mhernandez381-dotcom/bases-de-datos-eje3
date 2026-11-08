@@ -11,7 +11,7 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 | E2 — Ventana + conexión MariaDB | **Probado y cerrado** en el Codespace real (registro #3): BD, VNC con contraseña, ventana vista por el usuario vía noVNC, puerto 6080 *Private* (confirmado por el usuario), cierre con la X → JVM terminada | `docs/evidencias/E2-ventana-diagnostico-codespace-real.png` (+ capturas de réplica) |
 | E3 — Esquema, semilla y login | **Probado** (registro #4): 12 unitarias + 10 integración MariaDB real OK; semilla idempotente en la base operativa; login inválido/válido, logout, BD caída y cierre comprobados en el display `:1` con capturas. **Pendiente**: que el usuario lo repita en noVNC (opcional, recomendado) | `docs/evidencias/E3-*.png` |
 | E4 — CRUD Empresa | **Probado** (registro #5): 20 unitarias + 23 integración MariaDB real OK; recorrido visual completo en `:1` sobre la base de pruebas. **Pendiente**: repetición del usuario en noVNC (recomendada) | `docs/evidencias/E4-*.png` |
-| E5 — Pruebas y entrega | Pendiente | — |
+| E5 — Pruebas y entrega | **Probado** (registro #6): A12/A13 con reinicio real de MariaDB, respaldo/restauración, clon limpio, revisión de secretos y de código, JAR. **Pendiente del usuario**: Codespace nuevo desde cero (opcional), revisión independiente (opcional), decisión sobre hooks LFS y push | `docs/evidencias/E5-*.png` |
 
 ## Versiones fijadas (verificadas en fuentes oficiales el 2026-11-08)
 
@@ -168,7 +168,7 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 - Con la BD caída el cierre tarda ~5 s (pool intentando conectar); con BD disponible ~1 s.
 - Pendiente E5: A12 (reinicio de **MariaDB**), A16 (entorno limpio), revisión de diff/secretos, JAR y guía final; repetición por el usuario en noVNC.
 
-### Matriz de aceptación (estado tras E4)
+### Matriz de aceptación (actualizada en E5)
 
 | ID | Estado | Evidencia |
 |---|---|---|
@@ -183,22 +183,48 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 | A09 NIT eliminado | Probado (IT + visual) | `E4-08` |
 | A10 ID inexistente/eliminado | Probado (IT) | `EmpresaServiceIT.a10…` |
 | A11 Logout | Probado (IT + visual) | `E3-logout.png` |
-| A12 Reinicio app/BD | **Parcial**: reinicio de la app probado (`E4-10`); reinicio de MariaDB pendiente | — |
-| A13 Caída de BD | Probado en login (registro #4); en CRUD solo unitaria | `E3-bd-no-disponible.png` |
+| A12 Reinicio app/BD | Probado: app (`E4-10`) y MariaDB real (registro #6) | `E5-recuperada.png` |
+| A13 Caída de BD | Probado en login y en el CRUD con MariaDB realmente apagada | `E3-bd-no-disponible.png`, `E5-bd-caida.png` |
 | A14 Teclado/redimensionado/doble clic | Probado (visual) | `E4-11`, `E4-12`, `E4-13` |
 | A15 Propietario | Probado (IT con dos propietarios) | `EmpresaServiceIT.a15…` |
-| A16 Entorno limpio | Pendiente (E5) | — |
+| A16 Entorno limpio | Probado parcialmente: clon limpio compila y pasa 20+23 pruebas; Codespace nuevo desde cero no probado (requiere al usuario) | registro #6 |
+
+### 2026-11-08 #6 — E5: pruebas finales, respaldo, revisión y entrega (Codespace real)
+
+**Commit previo autorizado:** `9097856` (E4, local, sin push). Reinicio de MariaDB autorizado por el usuario.
+
+**A12/A13 — reinicio real de MariaDB (sin tocar el volumen):** dentro del contenedor `app` no hay CLI de Docker, así que se envió `SHUTDOWN` como root (cuenta del `.env`); la política `restart: unless-stopped` relanzó el contenedor (`Uptime` 3006 s → 6 s). Con la app abierta (base de pruebas) y la BD apagada, F5 → en ~5 s «No se pudo conectar con la base de datos…», ventana usable y lista anterior conservada (`E5-bd-caida.png`). Con la BD de vuelta, F5 → «Lista actualizada.» sin reiniciar la app (`E5-recuperada.png`) y una edición se guardó. Datos conservados en la base de pruebas; en la operativa, 1 usuario con SHA-256 del hash idéntico antes y después.
+
+**Respaldo y restauración (nuevo):** `scripts/respaldar.sh` (cuenta de la app, `--single-transaction`, sin `CREATE DATABASE`/`USE`/`DROP TABLE`, salida `respaldos/*.sql.gz` con permisos 600, ignorada por Git; credenciales en archivo temporal 600, no en la línea de comandos) y `scripts/restaurar.sh` (root; solo en base vacía; `--crear` opcional). Probado: respaldo de la base operativa y de la de pruebas; restaurar sobre `sg_huella_carbono_test` (con tablas) → rechazado, exit 1, sin cambios; restaurar en `sg_huella_carbono_restauracion_prueba` (creada con `--crear`) → 8 tablas, `CHECKSUM TABLE` idéntico en las 8 tablas, `UNIQUE KEY nit` y `empresa_ibfk_1` presentes. **Esa base de prueba se eliminó después con autorización del usuario** (`DROP DATABASE sg_huella_carbono_restauracion_prueba`; solo contenía la copia de datos de prueba). Quedan `sg_huella_carbono_revision` y `sg_huella_carbono_test`.
+
+**A16 — entorno limpio (parcial):** `git clone` del repo a una carpeta vacía del scratchpad → `./mvnw -B verify -Dintegracion` → 20 + 23 OK; `db/derivar-esquema.sh --verificar` OK. Confirma que el repo es autosuficiente (sin `.env` versionado; las IT usan las variables del contenedor). No se creó un Codespace nuevo (crea recursos con coste: acción del usuario).
+
+**Revisión de código y secretos:**
+- **Defecto de seguridad encontrado y corregido:** el renderizador por defecto de `JTable` interpreta como HTML un texto que empiece por `<html>`; un nombre de empresa así se renderizaba (y podría cargar imágenes remotas). Ahora las celdas usan un renderizador con `html.disable`. Verificado: `<html><b>NEGRITA</b> <i>cursiva</i>` se ve literal (`E5-html.png`). Los demás textos con datos del usuario no empiezan por `<html>` o ya se escapan (mensajes de login y formulario).
+- Revisado: SQL siempre parametrizado (la única concatenación es de nombres de tabla fijos en el soporte de pruebas); sin SQL ni trazas en la UI; logs sin contraseñas, hashes ni URL con credenciales; BD y BCrypt fuera del EDT; propietario solo desde la sesión.
+- Ningún valor `*PASSWORD` del `.env` aparece en archivos versionados/nuevos ni en el historial (`git log -p --all`). `target/`, `.env` y `respaldos/` ignorados.
+
+**Build final:** `./mvnw -B clean verify -Dintegracion` → 20/20 unitarias, 23/23 integración, BUILD SUCCESS, exit 0. JAR `target/huella-empresas-0.1.0.jar` (11 313 170 bytes) con JDK 21.0.13 y Maven 3.9.16. No es un instalador (necesita Java 21, `DISPLAY` y las variables `HUELLA_DB_*`).
+
+**README:** estado actualizado; nuevas secciones «Respaldo y restauración» y «Ejecutable (JAR) y entrega»; tabla de problemas ampliada.
+
+**Riesgos y limitaciones conocidas:**
+- Hooks de Git LFS: eran los 4 stubs estándar (`post-checkout`, `post-commit`, `post-merge`, `pre-push`; este último salía con código 2 sin `git-lfs` y habría bloqueado el push). El repo no usa LFS (sin `.gitattributes`). **Retirados con autorización del usuario**: movidos a `.git/hooks-lfs-retirados/` (local, no versionado, reversible moviéndolos de vuelta). Si se reconstruye el Codespace o se vuelve a clonar, podrían reaparecer.
+- El foco de los diálogos depende del gestor de ventanas del escritorio remoto; mitigado con `FocoDialogo` y verificado en fluxbox, pero un clic en el diálogo siempre funciona.
+- Columnas de fecha recortadas en ventanas muy estrechas; WARN del driver en NIT duplicado; cierre de ~5 s con BD caída.
+- Rúbrica: aún sin confirmar con el docente si basta un CRUD y si se acepta el borrado lógico.
+- Las capturas son del display `:1` tomadas por el agente; el usuario confirmó visualmente E2 en noVNC, pero no ha repetido E3–E5 en el navegador.
 
 ## Próximo paso
 
-1. ✅ Checkpoints locales `7c9eecb`, `19bdd62`, `6fbf534`. Sin push.
-2. ✅ E4 implementada y probada (registro #5). Sin commit todavía.
-3. **Usuario:** repetir en noVNC el recorrido (recomendado: con la base de pruebas, ver README) y autorizar el commit de E4.
-4. **Agente:** E5 — A12 con reinicio real de MariaDB (requiere autorización: reiniciar el contenedor `db` sin borrar el volumen), A13 en el CRUD, revisión del diff y de secretos, JAR final, guía de entrega y decisión sobre los hooks de Git LFS.
+1. ✅ Checkpoints locales `7c9eecb` (E0–E2), `19bdd62` (puerta E2), `6fbf534` (E3), `9097856` (E4) y el commit de E5. **Sin push.**
+2. ✅ Hooks LFS retirados y base de restauración eliminada (autorizado).
+3. **Usuario:** decidir el push de `feat/mvp-empresas` y el PR a `main` (no autorizado todavía).
+4. **Usuario (recomendado):** repetir el recorrido en noVNC; revisión independiente secuencial con `PROMPTS_REVISION.md`; confirmar la rúbrica con el docente.
 
 ## Decisiones pendientes de verificación (del kit)
 
 - Rúbrica: suficiencia de un CRUD y aceptación de borrado lógico (a confirmar por el usuario con el docente).
-- Push: no autorizado (solo existe el commit local `7c9eecb`).
+- Push: no autorizado todavía (todos los commits son locales).
 
 No guardar secretos ni tokens en este archivo.

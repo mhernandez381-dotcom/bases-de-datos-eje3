@@ -85,6 +85,12 @@ public class EmpresasVista extends JFrame {
         tabla.getColumnModel().getColumn(3).setPreferredWidth(150);
         tabla.getColumnModel().getColumn(4).setPreferredWidth(150);
         tabla.getSelectionModel().addListSelectionListener(e -> refrescarBotones());
+        // Swing interpreta como HTML un texto que empiece por "<html>": un nombre de empresa
+        // escrito por el usuario no debe renderizarse (ni cargar imágenes remotas).
+        javax.swing.table.DefaultTableCellRenderer textoPlano = new javax.swing.table.DefaultTableCellRenderer();
+        textoPlano.putClientProperty("html.disable", Boolean.TRUE);
+        tabla.setDefaultRenderer(String.class, textoPlano);
+        tabla.setDefaultRenderer(Object.class, textoPlano);
         JScrollPane desplazamiento = new JScrollPane(tabla);
         desplazamiento.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createEmptyBorder(0, 12, 0, 12), desplazamiento.getBorder()));

@@ -5,7 +5,7 @@ proyecto y taller del eje 3, en la asignatura bases de datos
 
 Aplicación de escritorio **Java 21 + Spring Boot 4.1.2 (no web) + Swing + Spring JDBC + MariaDB 11.8.8**: login con una cuenta demo y CRUD de empresas con borrado lógico. No es el sistema ambiental completo (sin consumos, sedes, factores, CO2, REST ni frontend web).
 
-> **Estado actual:** entorno (Dev Container + MariaDB + escritorio noVNC) construido y validado; la app muestra por ahora una **ventana de diagnóstico** de la conexión. Login y CRUD están **pendientes** (etapas E3–E4). Detalle y evidencias en [`ESTADO.md`](ESTADO.md).
+> **Estado:** login + CRUD de empresas implementados y probados en el Codespace (20 pruebas unitarias, 23 de integración contra MariaDB real y recorrido visual por noVNC). Matriz de aceptación, evidencias y limitaciones en [`ESTADO.md`](ESTADO.md).
 
 No necesitas instalar Java, MariaDB ni Docker en tu equipo: todo corre en GitHub Codespaces.
 
@@ -88,14 +88,30 @@ db/derivar-esquema.sh --verificar      # el esquema operativo coincide con el SQ
 - Unitarias (`*Test`): servicios de autenticación y empresas, y semilla, con Mockito.
 - Integración (`*IT`): DAO de usuario y empresa, semilla, inicio de sesión y reglas del CRUD (A04–A11, A15) contra MariaDB real. Usan solo `sg_huella_carbono_test` con `huella_test`: si la base está vacía aplican `db/esquema/tablas.sql`; si ya tiene las 8 tablas la vacían con `DELETE` antes de cada prueba; ante un esquema parcial fallan sin hacer DROP. Nunca tocan la base operativa.
 
-## 4. Respaldo
+## 4. Respaldo y restauración
 
 - `referencias/sg_huella_carbono_entrega.sql` se conserva **sin cambios** (SHA-256 `cd35e68b…a3`). Su sección 3 (copia SQL a `sg_huella_carbono_respaldo_revision_01`) es un procedimiento académico **manual**; nunca se ejecuta al arrancar.
-- Los datos viven en el volumen Docker `huella-mariadb-data`: sobreviven a parar/reiniciar y a un rebuild del Codespace, pero **se pierden si eliminas el Codespace**. Exporta antes fuera del Codespace.
+- Los datos viven en el volumen Docker `huella-mariadb-data`: sobreviven a parar/reiniciar MariaDB y a un rebuild del Codespace, pero **se pierden si eliminas el Codespace**. Exporta antes y guarda el archivo fuera del Codespace.
 
-> Pendiente (E5): script documentado de exportación `mariadb-dump` y procedimiento de restauración probado.
+```bash
+scripts/respaldar.sh                       # base operativa → respaldos/sg_huella_carbono_revision-<UTC>.sql.gz
+scripts/restaurar.sh respaldos/<archivo>.sql.gz <base_destino> [--crear]
+```
 
-## 5. Solución de problemas
+- `respaldar.sh` usa la cuenta de la aplicación con `--single-transaction` (copia consistente, sin bloquear) y no incluye `CREATE DATABASE`, `USE` ni `DROP TABLE`. El archivo contiene datos y hashes de contraseña: queda con permisos 600 y `respaldos/` está en `.gitignore`. Descárgalo desde el explorador de VS Code (clic derecho → *Download*).
+- `restaurar.sh` usa la cuenta root del `.env` y **solo restaura en una base vacía**: si la base destino tiene tablas, se detiene sin tocar nada. Con `--crear` crea la base si no existe. Para recuperar la base operativa en un Codespace nuevo: la inicialización crea la base con el esquema, así que restaura en una base nueva (`--crear`) y apunta la app a ella con `HUELLA_DB_NAME`, o pide ayuda antes de vaciar nada.
+
+## 5. Ejecutable (JAR) y entrega
+
+```bash
+./mvnw -B package -DskipTests              # → target/huella-empresas-0.1.0.jar (incluye dependencias)
+```
+
+El JAR **no es un instalador**: necesita Java 21, un escritorio (`DISPLAY`) y las variables `HUELLA_DB_*` (las define el Dev Container). Dentro del Codespace, usa `scripts/ejecutar.sh`. Fuera de él habría que proporcionar Java, MariaDB con el esquema y esas variables.
+
+Comprobación desde un entorno limpio (lo que se hizo en E5): clonar el repositorio en una carpeta vacía y ejecutar `./mvnw -B verify -Dintegracion` y `db/derivar-esquema.sh --verificar` dentro del Codespace. Un Codespace **nuevo** se inicializa solo (sección 1): genera su `.env` y su volumen vacío; después hay que crear la cuenta demo con `scripts/ejecutar.sh --demo`.
+
+## 6. Solución de problemas
 
 | Síntoma | Causa probable / acción |
 |---|---|
@@ -103,6 +119,9 @@ db/derivar-esquema.sh --verificar      # el esquema operativo coincide con el SQ
 | noVNC pide contraseña y no la acepta | Usa `HUELLA_VNC_PASSWORD`; si cambiaste el `.env`, ejecuta `bash .devcontainer/post-start.sh`. |
 | `No se pudo conectar con la base de datos` | `docker` no está dentro del contenedor; revisa el servicio `db` desde la vista de Codespaces o reconstruye. Nunca borres el volumen para "arreglarlo". |
 | La ventana no aparece | Verifica `echo $DISPLAY` (= `:1`) y que el escritorio noVNC esté conectado. |
+| Un diálogo aparece pero el teclado no responde | Haz clic en el diálogo. La app ya pide el foco al abrirlo, pero depende del gestor de ventanas del escritorio remoto. |
+| «Correo o contraseña incorrectos» con la cuenta demo | La semilla nunca cambia la contraseña de una cuenta existente: la válida es la del `.env` del momento en que se creó la cuenta. |
+| MariaDB se reinició | La app se reconecta sola: pulsa «Actualizar» (F5). |
 
 ## Estructura
 
@@ -112,6 +131,6 @@ db/derivar-esquema.sh --verificar      # el esquema operativo coincide con el SQ
 | `db/` | Derivación del esquema, esquema operativo e inicializador de MariaDB |
 | `referencias/` | SQL de referencia original (no modificar) |
 | `src/` | Código Java (paquete `edu.huella`) |
-| `scripts/` | Arranque de la aplicación |
+| `scripts/` | Arranque de la aplicación, respaldo y restauración |
 | `docs/` | README original del kit y evidencias |
 | `AGENTS.md`, `CLAUDE.md`, `PLAN_IMPLEMENTACION.md`, `PROMPT_MAESTRO.md`, `PROMPTS_REVISION.md`, `ESTADO.md` | Contexto y estado para agentes |
