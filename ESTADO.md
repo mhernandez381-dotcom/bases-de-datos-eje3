@@ -9,7 +9,7 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 | E0 — Inspección del entorno | **Probado** | Ver registro 2026-11-08 #1 |
 | E1 — Configuración reproducible | **Probado** (réplica con `@devcontainers/cli` dentro del Codespace) | Ver registros #1 y #2 |
 | E2 — Ventana + conexión MariaDB | **Probado y cerrado** en el Codespace real (registro #3): BD, VNC con contraseña, ventana vista por el usuario vía noVNC, puerto 6080 *Private* (confirmado por el usuario), cierre con la X → JVM terminada | `docs/evidencias/E2-ventana-diagnostico-codespace-real.png` (+ capturas de réplica) |
-| E3 — Esquema, semilla y login | Esquema derivado **probado** en MariaDB 11.8.8; semilla/login **pendientes** | — |
+| E3 — Esquema, semilla y login | **Probado** (registro #4): 12 unitarias + 10 integración MariaDB real OK; semilla idempotente en la base operativa; login inválido/válido, logout, BD caída y cierre comprobados en el display `:1` con capturas. **Pendiente**: que el usuario lo repita en noVNC (opcional, recomendado) | `docs/evidencias/E3-*.png` |
 | E4 — CRUD Empresa | Pendiente | — |
 | E5 — Pruebas y entrega | Pendiente | — |
 
@@ -106,13 +106,41 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 
 **No verificable por el agente:** la visibilidad *Private* del puerto 6080 (no hay `gh` en el contenedor; `devcontainer.json` no puede fijar visibilidad, el valor por defecto de Codespaces es privado) y la vista real en el navegador por noVNC. El cierre con la X lo hará el usuario sobre la ventana que quedó abierta.
 
+### 2026-11-08 #4 — E3: semilla, DAO Usuario, autenticación, sesión y login (Codespace real)
+
+**Commit previo autorizado:** `19bdd62` (checkpoint E2, local, sin push).
+
+**Archivos nuevos:** `model/Usuario`, `dto/UsuarioSesion` (id, nombre, correo: sin hash), `dao/UsuarioDAO` + `UsuarioDaoJdbc`, `service/AutenticacionService`, `service/Correos` (normalización: `strip` + minúsculas), `session/SesionUsuario`, `exception/AplicacionException` + `CredencialesInvalidasException`, `config/SeguridadConfig` (BCrypt coste 10), `config/SemillaDemo` (`@Profile("demo")`), `controller/LoginControlador` + `EmpresasControlador` (solo logout en E3), `view/LoginVista`, `view/EmpresasVista` (cabecera de sesión + «pendiente E4»), `view/AplicacionUI` (navegación y cierre), `resources/application-demo.properties`. Pruebas en `src/test/...`: `AutenticacionServiceTest`, `SemillaDemoTest`, `UsuarioDaoJdbcIT`, `SemillaDemoIT`, `AutenticacionServiceIT`, `soporte/BaseDatosPrueba`, `resources/application-integracion.properties`.
+**Modificados:** `HuellaApplication` (abre el login), `README.md` (arranque `--demo`, pruebas). **Eliminado:** `config/DiagnosticoConexion` (ventana provisional de E2; queda en el historial de Git).
+
+**Decisiones de diseño:**
+- La semilla busca el correo **incluyendo eliminados**: si existe, no inserta, no cambia el hash y no reactiva. Si dos arranques compiten, el `UNIQUE` de la BD gana (`DuplicateKeyException` → «ya existe»). Una configuración demo inválida aborta el arranque (el perfil se activó explícitamente); con la BD caída se registra un aviso y la UI arranca igual.
+- Login solo con `eliminado_en IS NULL`. Mismo mensaje para clave incorrecta, correo inexistente o usuario eliminado; con correo inexistente se compara contra un hash ficticio para igualar el tiempo. Se rechazan contraseñas de más de 72 bytes (límite de BCrypt).
+- BD y BCrypt en `SwingWorker`; el formulario se bloquea mientras se verifica (evita envíos dobles) y la contraseña se borra del campo y del `char[]`.
+- Cerrar cualquier ventana (X / Alt+F4) cierra sesión, libera la ventana y cierra el contexto Spring en otro hilo.
+- Las IT solo actúan si `DATABASE() = sg_huella_carbono_test`; aplican el esquema derivado si la base está vacía, vacían con `DELETE` (orden de FK) y fallan ante un esquema parcial (sin DROP).
+
+**Comandos y resultados (ejecutados de verdad):**
+- `./mvnw -B test` → 12 pruebas, 0 fallos (`AutenticacionServiceTest` 7, `SemillaDemoTest` 5).
+- `./mvnw -B verify -Dintegracion` → unitarias 12 OK + integración 10 OK (`AutenticacionServiceIT` 3, `UsuarioDaoJdbcIT` 5, `SemillaDemoIT` 2), BUILD SUCCESS, exit 0. Repetido tras el último cambio de la vista: mismo resultado. La base `sg_huella_carbono_test` tiene ahora las 8 tablas (aplicadas por la IT), con `PRIMARY KEY` y `UNIQUE KEY correo`. Sesión `+00:00` y `VERSION()` MariaDB comprobadas dentro de la IT.
+- **A02 en la base operativa:** `scripts/ejecutar.sh --demo` dos veces. Arranque 1: log «Semilla demo: cuenta creada (id=1)»; fila `Usuario Demo / demo@huella.local / $2a$…`, `eliminado_en` NULL. Arranque 2: «la cuenta ya existe; no se modifica»; `COUNT(*)=1`; SHA-256 del `password_hash` idéntico antes y después. La contraseña demo no aparece en ningún log (grep = 0).
+- **A03/A11 visual (display `:1`, xdotool + capturas revisadas por el agente):** clave incorrecta → «Correo o contraseña incorrectos.», campo de contraseña vacío (`E3-login-invalido.png`); clave correcta (tecleada desde el `.env` sin mostrarla) → ventana «Empresas» con «Sesión: Usuario Demo (demo@huella.local)» (`E3-login-ok.png`); Alt+S «Cerrar sesión» → login vacío, log «Sesión cerrada: usuario id=1» (`E3-logout.png`).
+- **A13:** app con `HUELLA_DB_HOST=127.0.0.1 HUELLA_DB_PORT=1` → el login aparece; al entrar, ~5 s (timeout de Hikari) y mensaje «No se pudo conectar con la base de datos. Inténtelo de nuevo en unos momentos.»; log `WARN … (CannotGetJdbcConnectionException)` sin SQL, URL ni secretos. **Defecto encontrado y corregido:** el mensaje se cortaba («Inténtelo de n…»); ahora hace salto de línea (`E3-bd-no-disponible.png`).
+- **Cierre:** con BD disponible, Alt+F4 → JVM terminada en ~1,5 s; con BD caída, ~5 s. (Un primer «JVM viva» fue un falso positivo: `pgrep -f` coincidía con mi propio comando; verificado con `kill -0 <PID>`.)
+
+**No probado / pendiente:**
+- Comprobación visual del usuario en noVNC (las capturas son del display `:1` tomadas por el agente, no del navegador).
+- Redimensionado y navegación completa por teclado (A14) solo se probó parcialmente (Tab, Enter, Alt+S, Alt+F4).
+- Reinicio de la BD (A12) aún no probado.
+
+**Observación del entorno:** `.git/hooks` contiene hooks de Git LFS (`post-commit`, `pre-push`, …) pero `git-lfs` no está instalado y el repo no tiene `.gitattributes`. El commit funciona con un aviso; **el hook `pre-push` probablemente bloqueará un push** hasta instalar git-lfs o retirar esos hooks (requiere decisión del usuario).
+
 ## Próximo paso
 
-1. ✅ Checkpoint `7c9eecb` (local, **sin push**; un push requiere autorización aparte).
-2. ✅ Rebuild real hecho y comprobaciones del agente en el Codespace real (registro #3).
-3. ✅ Puerta E2 superada (confirmación visual del usuario + cierre limpio verificado).
-4. **Usuario (opcional):** autorizar commit de checkpoint E2 (`ESTADO.md`, `scripts/ejecutar.sh`, evidencia, lock).
-5. **Agente:** E3 — semilla demo (perfil `demo`, BCrypt, idempotente), `UsuarioDAO`, autenticación, sesión y pantalla de login, con pruebas unitarias e integración en `sg_huella_carbono_test`.
+1. ✅ Checkpoints locales `7c9eecb` (E0–E2) y `19bdd62` (puerta E2). Sin push.
+2. ✅ E3 implementada y probada (registro #4).
+3. **Usuario (recomendado):** en noVNC, `scripts/ejecutar.sh` → probar clave incorrecta, entrar con la cuenta demo (`grep HUELLA_DEMO_ .devcontainer/.env`), «Cerrar sesión» y cerrar con la X. Autorizar commit de E3.
+4. **Agente:** E4 — `Empresa` (modelo), DTO de formulario/resumen, `EmpresaDAO` (listar activas del propietario, insertar, actualizar, borrado lógico comprobando filas), servicio con validaciones (NIT/nombre: trim, obligatorios, ≤20/≤150), manejo de NIT duplicado (incluso eliminado), controlador y vista con tabla + formulario reutilizado, con unitarias e IT (A04–A10, A15).
 
 ## Decisiones pendientes de verificación (del kit)
 

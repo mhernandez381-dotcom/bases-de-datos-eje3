@@ -44,7 +44,15 @@ La imagen incluye la CLI de Claude Code; tras cada rebuild hay que volver a aute
 scripts/ejecutar.sh          # compila si hace falta y abre la ventana en el escritorio
 ```
 
-(`scripts/ejecutar.sh --demo` activará la cuenta demo cuando exista la etapa E3.)
+**Primera vez:** crear la cuenta demo con
+
+```bash
+scripts/ejecutar.sh --demo   # perfil "demo": crea la cuenta SOLO si no existe y abre el login
+```
+
+La cuenta usa `HUELLA_DEMO_NOMBRE`, `HUELLA_DEMO_CORREO` y `HUELLA_DEMO_PASSWORD` de `.devcontainer/.env` (contraseña guardada como hash BCrypt). Repetir `--demo` no duplica la cuenta, no cambia su contraseña y no reactiva una cuenta eliminada. Para ver el correo y la contraseña: `grep HUELLA_DEMO_ .devcontainer/.env` (no compartir la salida).
+
+Las siguientes veces basta `scripts/ejecutar.sh`. Login: correo + contraseña, *Enter* o «Entrar»; «Cerrar sesión» (Alt+S) vuelve al login.
 
 Cerrar la ventana cierra el contexto Spring y el pool de conexiones y termina el proceso.
 
@@ -56,7 +64,8 @@ Cerrar la ventana cierra el contexto Spring y el pool de conexiones y termina el
 db/derivar-esquema.sh --verificar      # el esquema operativo coincide con el SQL de referencia
 ```
 
-> Pendiente: las pruebas unitarias y de integración se añaden en E3–E4.
+- Unitarias (`*Test`): servicio de autenticación y semilla, con Mockito.
+- Integración (`*IT`): DAO de usuario, semilla e inicio de sesión contra MariaDB real. Usan solo `sg_huella_carbono_test` con `huella_test`: si la base está vacía aplican `db/esquema/tablas.sql`; si ya tiene las 8 tablas la vacían con `DELETE` antes de cada prueba; ante un esquema parcial fallan sin hacer DROP. Nunca tocan la base operativa.
 
 ## 4. Respaldo
 
