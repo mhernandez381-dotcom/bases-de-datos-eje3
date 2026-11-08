@@ -217,14 +217,14 @@ Estados usados: **preparado** (archivo escrito, no ejecutado) · **implementado*
 
 ## Próximo paso
 
-1. ✅ Commits `7c9eecb` (E0–E2), `19bdd62` (puerta E2), `6fbf534` (E3), `9097856` (E4), `2c538ce` (E5). **Push autorizado y hecho** (2026-11-08) a `origin/feat/mvp-empresas`; PR #1 hacia `main` abierto: https://github.com/mhernandez381-dotcom/bases-de-datos-eje3/pull/1 (sin merge).
+1. ✅ Commits `7c9eecb` (E0–E2), `19bdd62` (puerta E2), `6fbf534` (E3), `9097856` (E4), `2c538ce` (E5). **Push autorizado y hecho** (2026-11-08) a `origin/feat/mvp-empresas`; PR #1 hacia `main`: https://github.com/mhernandez381-dotcom/bases-de-datos-eje3/pull/1 (fusionado).
 2. ✅ Hooks LFS retirados y base de restauración eliminada (autorizado).
-3. **Usuario:** revisar el PR #1 y decidir el merge (el agente no hace merge).
+3. ✅ PR #1 fusionado en `main` con autorización del usuario (commit de merge `94d987c`, método *merge*, SHA de la rama fijado). Rama `feat/mvp-empresas` eliminada tras el merge, también con autorización.
 4. **Usuario (recomendado):** repetir el recorrido en noVNC; revisión independiente secuencial con `PROMPTS_REVISION.md`; confirmar la rúbrica con el docente.
 
 ## Decisiones pendientes de verificación (del kit)
 
 - Rúbrica: suficiencia de un CRUD y aceptación de borrado lógico (a confirmar por el usuario con el docente).
-- Push hecho con autorización; merge a `main` pendiente de decisión del usuario.
+- Push y merge a `main` hechos con autorización del usuario (PR #1).
 
 No guardar secretos ni tokens en este archivo.
